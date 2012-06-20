@@ -114,7 +114,7 @@ de:
   error_sprint_end_before_start: Sprint kann nicht vor seinem Startdatum enden.
   error_taken: ist bereits in Bearbeitung
   event_sprint_summary: ! '%{project}: %{summary}'
-  field_assigned_to: Zugeordnet zu
+  field_assigned_to: Zugewiesen an
   field_backlogs_issue_type: Backlog Typ
   field_base: ''
   field_blocks: blockiert

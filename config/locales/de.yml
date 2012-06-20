@@ -48,7 +48,7 @@ de:
   error_release_end_after_start: Release Enddatum muss nach dem Startdatum liegen
   error_taken: ist bereits in Bearbeitung
   event_sprint_summary: "{{project}}: {{summary}}"
-  field_assigned_to: Zugeordnet zu
+  field_assigned_to: Zugewiesen an
   field_backlogs_issue_type: Backlog Typ
   field_blocks: blockiert
   field_remaining_hours: Remaining (hours)

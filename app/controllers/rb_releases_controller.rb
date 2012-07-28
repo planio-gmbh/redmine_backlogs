@@ -32,7 +32,7 @@ class RbReleasesController < RbApplicationController
   end
 
   def edit
-    if request.post? and @release.update_attributes(params[:release])
+    if request.post? and @release.batch_update_attributes(params[:release])
       flash[:notice] = l(:notice_successful_update)
       redirect_to :controller => 'rb_releases', :action => 'show', :release_id => @release
     else
@@ -64,5 +64,5 @@ class RbReleasesController < RbApplicationController
     @release.stories.each {|s| res += s.story_points if s.story_points}
     res
   end
-  
+
 end

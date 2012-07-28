@@ -1,7 +1,16 @@
 require 'redmine'
-require 'dispatcher'
 
-Dispatcher.to_prepare do
+if Rails::VERSION::MAJOR < 3
+  require 'dispatcher'
+  object_to_prepare = Dispatcher
+else
+  object_to_prepare = Rails.configuration
+  # if redmine plugins were railties:
+  # object_to_prepare = config
+end
+object_to_prepare.to_prepare do
+  require_dependency 'backlogs_activerecord_mixin'
+  require_dependency 'backlogs_setup'
   require_dependency 'issue'
 
   if Issue.const_defined? "SAFE_ATTRIBUTES"
@@ -19,13 +28,16 @@ Dispatcher.to_prepare do
   require_dependency 'backlogs_version_patch'
   require_dependency 'backlogs_project_patch'
   require_dependency 'backlogs_user_patch'
+  require_dependency 'backlogs_journal_patch'
+
   require_dependency 'backlogs_my_controller_patch'
+  require_dependency 'backlogs_issues_controller_patch'
 
   require_dependency 'backlogs_hooks'
 
   require_dependency 'backlogs_merged_array'
 
-  require_dependency 'backlogs_version'
+  require_dependency 'backlogs_printable_cards'
 
   Redmine::AccessControl.permission(:manage_versions).actions << "rb_sprints/close_completed"
 end
@@ -33,9 +45,9 @@ end
 
 Redmine::Plugin.register :redmine_backlogs do
   name 'Redmine Backlogs'
-  author 'relaxdiego, friflaj'
+  author "friflaj,Mark Maglana,John Yani,mikoto20000,Frank Blendinger,Bo Hansen,stevel"
   description 'A plugin for agile teams'
-  version 'v0.7.0'
+  version 'v0.9.15'
 
   settings :default => { 
                          :story_trackers            => nil, 
@@ -45,7 +57,7 @@ Redmine::Plugin.register :redmine_backlogs do
                          :story_points              => "1,2,3,5,8",
                          :show_burndown_in_sidebar  => 'enabled'
                        }, 
-           :partial => 'shared/settings'
+           :partial => 'backlogs/settings'
 
   project_module :backlogs do
     # SYNTAX: permission :name_of_permission, { :controller_name => [:action1, :action2] }
@@ -61,8 +73,7 @@ Redmine::Plugin.register :redmine_backlogs do
                                         :rb_wikis            => :show,
                                         :rb_stories          => [:index, :show],
                                         :rb_queries          => [:show, :impediments],
-                                        :rb_server_variables => :show,
-                                        :rb_all_projects     => :server_variables,
+                                        :rb_server_variables => [:project, :sprint, :index],
                                         :rb_burndown_charts  => [:embedded, :show, :print],
                                         :rb_updated_items    => :show
                                       }
@@ -72,8 +83,7 @@ Redmine::Plugin.register :redmine_backlogs do
                                         :rb_sprints          => [:index, :show, :download],
                                         :rb_wikis            => :show,
                                         :rb_stories          => [:index, :show],
-                                        :rb_server_variables => :show,
-                                        :rb_all_projects     => :server_variables,
+                                        :rb_server_variables => [:project, :sprint, :index],
                                         :rb_burndown_charts  => [:embedded, :show, :print],
                                         :rb_updated_items    => :show
                                       }
@@ -85,8 +95,7 @@ Redmine::Plugin.register :redmine_backlogs do
                                         :rb_tasks            => [:index, :show],
                                         :rb_impediments      => [:index, :show],
                                         :rb_wikis            => :show,
-                                        :rb_server_variables => :show,
-                                        :rb_all_projects     => :server_variables,
+                                        :rb_server_variables => [:project, :sprint, :index],
                                         :rb_hooks_render     => [:view_issues_sidebar],
                                         :rb_burndown_charts  => [:embedded, :show, :print],
                                         :rb_updated_items    => :show
@@ -113,6 +122,8 @@ Redmine::Plugin.register :redmine_backlogs do
     permission :create_tasks,           { :rb_tasks => [:new, :create]  }
     permission :update_tasks,           { :rb_tasks => [:edit, :update] }
     
+    permission :update_remaining_hours, { :rb_tasks => [:edit, :update] }
+
     # Impediment permissions
     # :show_impediments and :list_impediments are implicit in :view_sprints
     permission :create_impediments,     { :rb_impediments => [:new, :create]  }
@@ -122,7 +133,7 @@ Redmine::Plugin.register :redmine_backlogs do
     permission :view_scrum_statistics,   { :rb_all_projects => :statistics }
   end
 
-  menu :project_menu, :rb_master_backlogs, { :controller => :rb_master_backlogs, :action => :show }, :caption => :label_backlogs, :after => :issues, :param => :project_id
-  menu :project_menu, :rb_releases, { :controller => :rb_releases, :action => :index }, :caption => :label_release_plural, :after => :rb_master_backlogs, :param => :project_id
-  menu :application_menu, :rb_statistics, { :controller => :rb_all_projects, :action => :statistics}, :caption => :label_scrum_statistics, :if => Proc.new {|| User.current.allowed_to?({:controller => :rb_all_projects, :action => :statistics}, nil, :global => true) }
+  menu :project_menu, :rb_master_backlogs, { :controller => :rb_master_backlogs, :action => :show }, :caption => :label_backlogs, :after => :issues, :param => :project_id, :if => Proc.new { Backlogs.configured? }
+  menu :project_menu, :rb_releases, { :controller => :rb_releases, :action => :index }, :caption => :label_release_plural, :after => :rb_master_backlogs, :param => :project_id, :if => Proc.new { Backlogs.configured? }
+  menu :application_menu, :rb_statistics, { :controller => :rb_all_projects, :action => :statistics}, :caption => :label_scrum_statistics, :if => Proc.new { Backlogs.configured? && User.current.allowed_to?({:controller => :rb_all_projects, :action => :statistics}, nil, :global => true) }
 end

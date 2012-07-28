@@ -19,8 +19,9 @@ RB.Task = RB.Object.create(RB.Issue, {
   },
 
   beforeSave: function(){
-    var c = this.$.find('select.assigned_to_id').children(':selected').attr('color');
-    var c_light = this.$.find('select.assigned_to_id').children(':selected').attr('color_light');
+    var c = this.$.find('select.assigned_to_id').find(':selected').attr('color');
+    var c_light = this.$.find('select.assigned_to_id').find(':selected').attr('color_light');
+    // Only change color of task if assigned_to_id has a selected user/group
     if(c!=undefined){
       this.$.css('background-color', c);
       this.$.css('background', '-webkit-gradient(linear, left top, left bottom, from('+c_light+'), to('+c+'))');

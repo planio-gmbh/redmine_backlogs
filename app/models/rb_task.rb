@@ -4,17 +4,28 @@ class RbTask < Issue
   unloadable
 
   def self.tracker
-    task_tracker = Setting.plugin_redmine_backlogs[:task_tracker]
+    task_tracker = Backlogs.setting[:task_tracker]
     return nil if task_tracker.blank?
     return Integer(task_tracker)
   end
 
-  def self.create_with_relationships(params, user_id, project_id, is_impediment = false)
+  def self.rb_safe_attributes(params)
     if Issue.const_defined? "SAFE_ATTRIBUTES"
-      attribs = params.clone.delete_if {|k,v| !RbTask::SAFE_ATTRIBUTES.include?(k) && !RbTask.column_names.include?(k) }
+      safe_attributes_names = RbTask::SAFE_ATTRIBUTES
     else
-      attribs = params.clone.delete_if {|k,v| !Issue.new.safe_attribute_names.include?(k.to_s) && !RbTask.column_names.include?(k)}
+      safe_attributes_names = Issue.new(
+        :project_id=>params[:project_id] # required to verify "safeness"
+      ).safe_attribute_names
     end
+    attribs = params.select {|k,v| safe_attributes_names.include?(k) }
+    # lft and rgt fields are handled by acts_as_nested_set
+    attribs = attribs.select{|k,v| k != 'lft' and k != 'rgt' }
+    attribs = Hash[*attribs.flatten] if attribs.is_a?(Array)
+    return attribs
+  end
+
+  def self.create_with_relationships(params, user_id, project_id, is_impediment = false)
+    attribs = rb_safe_attributes(params)
 
     attribs['author_id'] = user_id
     attribs['tracker_id'] = RbTask.tracker
@@ -29,7 +40,7 @@ class RbTask < Issue
     end
     task.save!
 
-    raise "Not a valid block list" if is_impediment && !task.validate_blocks_list(blocks)
+    raise "Block list must be comma-separated list of task IDs" if is_impediment && !task.validate_blocks_list(blocks)
 
     task.move_before params[:next] unless is_impediment # impediments are not hosted under a single parent, so you can't tree-order them
     task.update_blocked_list blocks.split(/\D+/) if is_impediment
@@ -53,7 +64,7 @@ class RbTask < Issue
       story.descendants.each_with_index {|task, i|
         task = task.becomes(RbTask)
         task.rank = i + 1
-        tasks << task 
+        tasks << task
       }
     end
     return tasks
@@ -61,10 +72,15 @@ class RbTask < Issue
 
   def update_with_relationships(params, is_impediment = false)
     time_entry_add(params)
-    if Issue.const_defined? "SAFE_ATTRIBUTES"
-      attribs = params.clone.delete_if {|k,v| !RbTask::SAFE_ATTRIBUTES.include?(k) }
-    else
-      attribs = params.clone.delete_if {|k,v| !Issue.new.safe_attribute_names.include?(k.to_s) }
+
+    attribs = RbTask.rb_safe_attributes(params)
+
+    # Auto assign task to current user when
+    # 1. the task is not assigned to anyone yet
+    # 2. task status changed (i.e. Updating task name or remaining hours won't assign task to user)
+    # Can be enabled/disabled in setting page
+    if Backlogs.setting[:auto_assign_task] && self.assigned_to_id.blank? && (self.status_id != params[:status_id].to_i)
+      attribs[:assigned_to_id] = User.current.id
     end
 
     valid_relationships = if is_impediment && params[:blocks] #if blocks param was not sent, that means the impediment was just dragged
@@ -73,7 +89,7 @@ class RbTask < Issue
                             true
                           end
 
-    if valid_relationships && result = journalized_update_attributes!(attribs)
+    if valid_relationships && result = self.journalized_batch_update_attributes!(attribs)
       move_before params[:next] unless is_impediment # impediments are not hosted under a single parent, so you can't tree-order them
       update_blocked_list params[:blocks].split(/\D+/) if params[:blocks]
 
@@ -81,13 +97,13 @@ class RbTask < Issue
         begin
           self.remaining_hours = Float(params[:remaining_hours].to_s.gsub(',', '.'))
         rescue ArgumentError, TypeError
-          RAILS_DEFAULT_LOGGER.warn "#{params[:remaining_hours]} is wrong format for remaining hours."
+          Rails.logger.warn "#{params[:remaining_hours]} is wrong format for remaining hours."
         end
         sprint_start = self.story.fixed_version.becomes(RbSprint).sprint_start_date if self.story
         self.estimated_hours = self.remaining_hours if (sprint_start == nil) || (Date.today < sprint_start)
         save
       end
-                                    
+
       result
     else
       false
@@ -149,64 +165,33 @@ class RbTask < Issue
     return nil if sprint.nil? || !sprint.has_burndown?
 
     return Rails.cache.fetch("RbIssue(#{self.id}@#{self.updated_on}).burndown(#{sprint.id}@#{sprint.updated_on}-#{[Date.today, sprint.effective_date].min})") {
-      bd = nil
-      if sprint.has_burndown?
-        days = sprint.days(:active)
-        series = Backlogs::MergedArray.new
-        series.merge(:hours => history(:remaining_hours, days))
-        series.merge(:sprint => history(:fixed_version_id, days))
-        series.merge(:sprint_start => days.collect{|d| (d == sprint.sprint_start_date)} + [false])
-        series.each{|d|
-          if d.sprint != sprint.id
-            d.hours = nil
-          elsif d.sprint_start
-            d.hours = self.estimated_hours # self.value_at(:estimated_hours, self.sprint_start_date)
-          end
-        }
-        bd = series.series(:hours)
-      end
+      days = sprint.days(:active)
 
-      bd
+      earliest_estimate = history(:estimated_hours, days).compact[0]
+
+      series = Backlogs::MergedArray.new
+      series.merge(:hours => history(:remaining_hours, days))
+      series.merge(:sprint => history(:fixed_version_id, days))
+      series.each_with_index{|d, i|
+        if d.sprint != sprint.id
+          d.hours = nil
+        elsif i == 0 && d.hours.to_f == 0 && earliest_estimate.to_f != 0.0
+          # set hours to earliest estimate *within sprint* if first day is not filled out
+          d.hours = earliest_estimate
+        end
+      }
+      series.series(:hours)
     }
   end
 
-  def set_initial_estimate(hours)
-    if fixed_version_id and fixed_version.sprint_start_date
-      time = [fixed_version.sprint_start_date.to_time, created_on].max
-    else
-      time = created_on
-    end
-
-    jd = JournalDetail.find(:first, :order => "journals.created_on desc", :joins => :journal,
-      :conditions => ["property = 'attr' and prop_key = 'estimated_hours' and journalized_type = 'Issue' and journalized_id = ? and created_on <= ?", id, time])
-
-    if jd
-      if jd.value.blank? || Float(jd.value) != hours
-        hours = hours.to_s.gsub(/\.0+$/, '')
-
-        JournalDetail.connection.execute("update journal_details set value='#{hours}' where id = #{jd.id}")
-
-        jd = JournalDetail.find(:first, :order => "journals.created_on asc", :joins => :journal,
-          :conditions => ["property = 'attr' and prop_key = 'remaining_hours' and journalized_type = 'Issue' and journalized_id = ? and created_on >= ?", id, jd.journal.created_on])
-        JournalDetail.connection.execute("update journal_details set old_value='#{hours}' where id = #{jd.id}") if jd
-      end
-    else
-      if hours != remaining_hours
-        j = Journal.new(:journalized => self, :user => User.current, :created_on => time)
-        j.details << JournalDetail.new(:property => 'attr', :prop_key => 'remaining_hours', :value => remaining_hours, :old_value => hours)
-        j.save!
-      end
-    end
-  end
-
   def time_entry_add(params)
-    # Will also save time entry if only comment is filled, hours will default to 0. We don't want the user 
+    # Will also save time entry if only comment is filled, hours will default to 0. We don't want the user
     # to loose a precious comment if hours is accidently left blank.
     if !params[:time_entry_hours].blank? || !params[:time_entry_comments].blank?
-      @time_entry = TimeEntry.new(:issue => self, :project => self.project) 
-      # Make sure user has permission to edit time entries to allow 
-      # logging time for other users
-      if User.current.allowed_to?(:edit_time_entries, self.project)
+      @time_entry = TimeEntry.new(:issue => self, :project => self.project)
+      # Make sure user has permission to edit time entries to allow
+      # logging time for other users. Use current user in case none is selected
+      if User.current.allowed_to?(:edit_time_entries, self.project) && params[:time_entry_user_id].to_i != 0
         @time_entry.user_id = params[:time_entry_user_id]
       else
         # Otherwise log time for current user

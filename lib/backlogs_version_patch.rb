@@ -9,12 +9,13 @@ module Backlogs
       base.class_eval do
         unloadable
 
+        include Backlogs::ActiveRecord::Attributes
       end
     end
-  
+
     module ClassMethods
     end
-  
+
     module InstanceMethods
       def burndown
         return RbSprint.find_by_id(self.id).burndown

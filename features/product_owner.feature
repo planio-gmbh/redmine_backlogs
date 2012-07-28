@@ -6,23 +6,23 @@ Feature: Product Owner
   Background:
     Given the ecookbook project has the backlogs plugin enabled
       And I am a product owner of the project
-      And the project has the following sprints:
+      And I have defined the following sprints:
         | name       | sprint_start_date | effective_date |
         | Sprint 001 | 2010-01-01        | 2010-01-31     |
         | Sprint 002 | 2010-02-01        | 2010-02-28     |
         | Sprint 003 | 2010-03-01        | 2010-03-31     |
         | Sprint 004 | 2010-03-01        | 2010-03-31     |
       And I have deleted all existing issues
-      And the project has the following stories in the product backlog:
-        | position | subject |
-        | 1        | Story 1 |
-        | 2        | Story 2 |
-        | 3        | Story 3 |
-        | 4        | Story 4 |
-      And the project has the following stories in the following sprints:
-        | position | subject | sprint     |
-        | 5        | Story A | Sprint 001 |
-        | 6        | Story B | Sprint 001 |
+      And I have defined the following stories in the product backlog:
+        | subject |
+        | Story 1 |
+        | Story 2 |
+        | Story 3 |
+        | Story 4 |
+      And I have defined the following stories in the following sprints:
+        | subject | sprint     |
+        | Story A | Sprint 001 |
+        | Story B | Sprint 001 |
 
   Scenario: View the product backlog
     Given I am viewing the master backlog
@@ -39,7 +39,8 @@ Feature: Product Owner
       And I want to create a story
       And I set the subject of the story to A Whole New Story
      When I create the story
-     Then the 1st story in the product backlog should be A Whole New Story
+     Then the request should complete successfully
+      And the 1st story in the product backlog should be A Whole New Story
       And all positions should be unique
 
   Scenario: Update a story
@@ -48,7 +49,8 @@ Feature: Product Owner
       And I set the subject of the story to Relaxdiego was here
       And I set the tracker of the story to Bug
      When I update the story
-     Then the story should have a subject of Relaxdiego was here
+     Then the request should complete successfully
+      And the story should have a subject of Relaxdiego was here
       And the story should have a tracker of Bug
       And the story should be at position 3
 
@@ -57,7 +59,8 @@ Feature: Product Owner
       And I want to edit the story with subject Story 4
       And I set the status of the story to Closed
      When I update the story
-     Then the status of the story should be set as closed
+     Then the request should complete successfully
+      And the status of the story should be set as closed
 
   Scenario: Move a story to the top
     Given I am viewing the master backlog

@@ -245,7 +245,7 @@ RB.Model = RB.Object.create({
 
   refresh: function(obj){
     this.$.html(obj.$.html());
-  
+    this.$[0].className = obj.$[0].className; //this.$.attr('class', obj.$.attr('class'));
     if(obj.isClosed()){
       this.close();
     } else {
@@ -293,7 +293,7 @@ RB.Model = RB.Object.create({
     self.unmarkError();
     self.markSaving();
     
-    jQuery.ajax({
+    RB.ajax({
        type: "POST",
        url: saveDir.url,
        data: saveDir.data,

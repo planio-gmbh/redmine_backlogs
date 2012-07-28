@@ -7,23 +7,23 @@ Feature: Scrum Master
     Given the ecookbook project has the backlogs plugin enabled
       And I am a scrum master of the project
       And I have deleted all existing issues
-      And the project has the following sprints:
+      And I have defined the following sprints:
         | name       | sprint_start_date | effective_date  |
         | Sprint 001 | 2010-01-01        | 2010-01-31      |
         | Sprint 002 | 2010-02-01        | 2010-02-28      |
         | Sprint 003 | 2010-03-01        | 2010-03-31      |
         | Sprint 004 | 2.weeks.ago       | 1.week.from_now |
-      And the project has the following stories in the product backlog:
-        | position | subject |
-        | 1        | Story 1 |
-        | 2        | Story 2 |
-        | 3        | Story 3 |
-        | 4        | Story 4 |
-      And the project has the following stories in the following sprints:
-        | position | subject | sprint     |
-        | 5        | Story A | Sprint 001 |
-        | 6        | Story B | Sprint 001 |
-      And the project has the following impediments:
+      And I have defined the following stories in the product backlog:
+        | subject |
+        | Story 1 |
+        | Story 2 |
+        | Story 3 |
+        | Story 4 |
+      And I have defined the following stories in the following sprints:
+        | subject | sprint     |
+        | Story A | Sprint 001 |
+        | Story B | Sprint 001 |
+      And I have defined the following impediments:
         | subject      | sprint     | blocks  |
         | Impediment 1 | Sprint 001 | Story A | 
 
@@ -50,6 +50,7 @@ Feature: Scrum Master
      Then the request should complete successfully
      When I follow "Impediments"
      Then the request should complete successfully
+      And dump the page to "log/ViewImpediments.html"
       And I should see "Impediment 1"
 
   Scenario: Create a new sprint
@@ -96,25 +97,32 @@ Feature: Scrum Master
      Then the request should complete successfully
       And Story A should be in the 2nd position of the sprint named Sprint 001
       And Story B should be the higher item of Story A
-     
-  Scenario: Request the project calendar feed
-    Given I have set my API access key
-      And I move the story named Story 4 down to the 1st position of the sprint named Sprint 004
+
+  Scenario: Authorized request to the project calendar feed
+    Given I move the story named Story 4 down to the 1st position of the sprint named Sprint 004
+      And I have set my API access key
       And I am logged out
-     When I try to download the calendar feed, it should succeed
-      And the request should complete successfully
-    Given I have guessed an API access key
-     When I try to download the calendar feed, it should fail
-      And the request should complete successfully
-     
+     When I try to download the calendar feed
+     Then the request should complete successfully
+      And calendar feed download should succeed
+
+  Scenario: Unauthorized request to the project calendar feed
+    Given I move the story named Story 4 down to the 1st position of the sprint named Sprint 004
+      And I have set my API access key
+      And I am logged out
+      And I have guessed an API access key
+     When I try to download the calendar feed
+     Then the request should fail
+      And calendar feed download should fail
+
   Scenario: Download printable cards for the product backlog
-    Given I have selected card label stock Avery 7169
+    Given I have selected card label stock Zweckform 3474
       And I am viewing the issues sidebar
      When I follow "Product backlog cards"
      Then the request should complete successfully
 
   Scenario: Download printable cards for the task board
-    Given I have selected card label stock Avery 7169
+    Given I have selected card label stock Zweckform 3474
       And I move the story named Story 4 up to the 1st position of the sprint named Sprint 001
       And I am viewing the issues sidebar for Sprint 001
      When I follow "Sprint cards"

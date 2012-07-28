@@ -6,7 +6,7 @@ include RbCommonHelper
 # info about the taskboard, see RbTaskboardsController
 class RbSprintsController < RbApplicationController
   unloadable
-  
+
   def create
     attribs = params.select{|k,v| k != 'id' and RbSprint.column_names.include? k }
     attribs = Hash[*attribs.flatten]
@@ -19,11 +19,11 @@ class RbSprintsController < RbApplicationController
       return
     end
 
-    result = @sprint.errors.length
+    result = @sprint.errors.size
     status = (result == 0 ? 200 : 400)
 
     respond_to do |format|
-      format.html { render :partial => "sprint", :status => status }
+      format.html { render :partial => "sprint", :status => status, :locals => { :sprint => @sprint } }
     end
   end
 
@@ -31,14 +31,14 @@ class RbSprintsController < RbApplicationController
     attribs = params.select{|k,v| k != 'id' and RbSprint.column_names.include? k }
     attribs = Hash[*attribs.flatten]
     begin
-      result  = @sprint.update_attributes attribs
+      result  = @sprint.batch_update_attributes attribs
     rescue => e
       render :text => e.message.blank? ? e.to_s : e.message, :status => 400
       return
     end
 
     respond_to do |format|
-      format.html { render :partial => "sprint", :status => (result ? 200 : 400) }
+      format.html { render :partial => "sprint", :status => (result ? 200 : 400), :locals => { :sprint => @sprint } }
     end
   end
 
@@ -66,7 +66,7 @@ class RbSprintsController < RbApplicationController
       }
     }
 
-    send_data(dump.to_xml, :disposition => 'attachment', :type => 'application/vnd.ms-exce', :filename => "#{@project.identifier}-#{@sprint.name.gsub(/[^a-z0-9]/i, '')}.xml")
+    send_data(dump.to_xml, :disposition => 'attachment', :type => 'application/vnd.ms-excel', :filename => "#{@project.identifier}-#{@sprint.name.gsub(/[^a-z0-9]/i, '')}.xml")
   end
 
   def reset
@@ -79,7 +79,7 @@ class RbSprintsController < RbApplicationController
     status = IssueStatus.default.id
     Issue.find(:all, :conditions => ['fixed_version_id = ?', @sprint.id]).each {|issue|
       ids << issue.id.to_s
-      issue.update_attributes!(:created_on => @sprint.sprint_start_date.to_time, :status_id => status)
+      issue.batch_update_attributes!(:created_on => @sprint.sprint_start_date.to_time, :status_id => status)
     }
     if ids.size != 0
       ids = ids.join(',')

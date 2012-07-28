@@ -1,224 +1,196 @@
 class RbStory < Issue
-    unloadable
+  unloadable
 
-    acts_as_list
+  def self.find_options(options)
+    options = options.dup
 
-    def self.condition(project_id, sprint_id, extras=[])
-      if Issue.respond_to? :visible_condition
-        visible = Issue.visible_condition(User.current, :project => Project.find(project_id))
-      else
-      	visible = Project.allowed_to_condition(User.current, :view_issues)
-      end
-      visible = '1=1' # unless visible
-
-      if sprint_id.nil?  
-        c = ["
-          project_id = ?
-          and tracker_id in (?)
-          and fixed_version_id is NULL
-          and is_closed = ? and #{visible}", project_id, RbStory.trackers, false]
-      else
-        unless sprint_id.kind_of? Array
-            sprint_id = [ sprint_id ]
-        end
-        c = ["
-          project_id = ?
-          and tracker_id in (?)
-          and fixed_version_id IN (?) and #{visible}",
-          project_id, RbStory.trackers, sprint_id]
-      end
-
-      if extras.size > 0
-        c[0] += ' ' + extras.shift
-        c += extras
-      end
-
-      return c
-    end
-
-    # this forces NULLS-LAST ordering
-    ORDER = 'case when issues.position is null then 1 else 0 end ASC, case when issues.position is NULL then issues.id else issues.position end ASC'
-
-    def self.backlog(project_id, sprint_id, options={})
-      stories = []
-
-      RbStory.find(:all,
-            :order => RbStory::ORDER,
-            :conditions => RbStory.condition(project_id, sprint_id),
-            :joins => [:status, :project],
-            :limit => options[:limit]).each_with_index {|story, i|
-        story.rank = i + 1
-        stories << story
-      }
-
-      return stories
-    end
-
-    def self.product_backlog(project, limit=nil)
-      return RbStory.backlog(project.id, nil, :limit => limit)
-    end
-
-    def self.sprint_backlog(sprint, options={})
-      return RbStory.backlog(sprint.project.id, sprint.id, options)
-    end
-
-    def self.backlogs_by_sprint(project, sprints, options={})
-        ret = RbStory.backlog(project.id, sprints.map {|s| s.id }, options)
-        sprint_of = {}
-        ret.each do |backlog|
-            sprint_of[backlog.fixed_version_id] ||= []
-            sprint_of[backlog.fixed_version_id].push(backlog)
-        end
-        return sprint_of
-    end
-
-    def self.stories_open(project)
-      stories = []
-
-      RbStory.find(:all,
-            :order => RbStory::ORDER,
-            :conditions => ["project_id = ? AND tracker_id in (?) and is_closed = ?",project.id,RbStory.trackers,false],
-            :joins => :status).each_with_index {|story, i|
-        story.rank = i + 1
-        stories << story
-      }
-      return stories
-    end
-
-    def self.create_and_position(params)
-      attribs = params.select{|k,v| k != 'prev_id' and k != 'id' and RbStory.column_names.include? k }
-      attribs = Hash[*attribs.flatten]
-      s = RbStory.new(attribs)
-      s.save!
-      s.move_after(params['prev_id'])
-      return s
-    end
-
-    def self.find_all_updated_since(since, project_id)
-      find(:all,
-           :conditions => ["project_id = ? AND updated_on > ? AND tracker_id in (?)", project_id, Time.parse(since), trackers],
-           :order => "updated_on ASC")
-    end
-
-    def self.trackers(type = :array)
-      # somewhere early in the initialization process during first-time migration this gets called when the table doesn't yet exist
-      trackers = []
-      if ActiveRecord::Base.connection.tables.include?('settings')
-        trackers = Setting.plugin_redmine_backlogs[:story_trackers]
-        trackers = [] if trackers.blank?
-      end
-
-      return trackers.join(',') if type == :string
-
-      return trackers.map { |tracker| Integer(tracker) }
-    end
-
-    def tasks
-      return RbTask.tasks_for(self.id)
-    end
-
-    def move_after(prev_id)
-      # remove so the potential 'prev' has a correct position
-      remove_from_list
-
-      if prev_id.to_s == ''
-        prev = nil
-      else
-        prev = RbStory.find(prev_id)
-      end
-
-      # if it's the first story, move it to the 1st position
-      if prev.blank?
-        insert_at
-        move_to_top
-
-      # if its predecessor has no position (shouldn't happen), make it
-      # the last story
-      elsif !prev.in_list?
-        insert_at
-        move_to_bottom
-
-      # there's a valid predecessor
-      else
-        insert_at(prev.position + 1)
-      end
-    end
-
-    def set_points(p)
-        self.init_journal(User.current)
-
-        if p.blank? || p == '-'
-            self.update_attribute(:story_points, nil)
-            return
-        end
-
-        if p.downcase == 's'
-            self.update_attribute(:story_points, 0)
-            return
-        end
-
-        p = Integer(p)
-        if p >= 0
-            self.update_attribute(:story_points, p)
-            return
-        end
-    end
-
-    def points_display(notsized='-')
-        # For reasons I have yet to uncover, activerecord will
-        # sometimes return numbers as Fixnums that lack the nil?
-        # method. Comparing to nil should be safe.
-        return notsized if story_points == nil || story_points.blank?
-        return 'S' if story_points == 0
-        return story_points.to_s
-    end
-
-    def task_status
-        closed = 0
-        open = 0
-        self.descendants.each {|task|
-            if task.closed?
-                closed += 1
-            else
-                open += 1
-            end
-        }
-        return {:open => open, :closed => closed}
-    end
-
-    def update_and_position!(params)
-      attribs = params.select{|k,v| k != 'id' && k != 'project_id' && RbStory.column_names.include?(k) }
-      attribs = Hash[*attribs.flatten]
-      result = journalized_update_attributes attribs
-      if result and params[:prev]
-        move_after(params[:prev])
-      end
-      result
-    end
-
-  def rank=(r)
-    @rank = r
-  end
-
-  def rank
-    if self.position.blank?
-      extras = ['and ((issues.position is NULL and issues.id <= ?) or not issues.position is NULL)', self.id]
+    project = options.delete(:project)
+    if project.nil?
+      project_id = nil
+    elsif project.is_a?(Integer)
+      project_id = project
+      project = nil
     else
-      extras = ['and not issues.position is NULL and issues.position <= ?', self.position]
+      project_id = project.id
     end
 
-    @rank ||= Issue.count(:conditions => RbStory.condition(self.project.id, self.fixed_version_id, extras), :joins => [:status, :project])
+    sprint_ids = options.delete(:sprint)
+    sprint_ids = [sprint_ids] if sprint_ids && !sprint_ids.is_a?(Array)
+    sprint_ids = sprint_ids.collect{|s| s.is_a?(Integer) ? s : s.id} if sprint_ids
 
-    return @rank
+    permission = options.delete(:permission)
+    permission = false if permission.nil?
+
+    options[:conditions] ||= []
+
+    if permission
+      if Issue.respond_to? :visible_condition
+        visible = Issue.visible_condition(User.current, :project => project || Project.find(project_id))
+      else
+    	  visible = Project.allowed_to_condition(User.current, :view_issues)
+      end
+      Backlogs::ActiveRecord.add_condition(options, visible)
+    end
+
+    if sprint_ids.nil?
+      Backlogs::ActiveRecord.add_condition(options, ["
+        project_id = ?
+        and tracker_id in (?)
+        and fixed_version_id is NULL
+        and is_closed = ?", project_id, RbStory.trackers, false])
+      options[:joins] ||= []
+      options[:joins] [options[:joins]] unless options[:joins].is_a?(Array)
+      options[:joins] << :status
+      options[:joins] << :project
+    else
+      Backlogs::ActiveRecord.add_condition(options, ["
+        project_id = ?
+        and tracker_id in (?)
+        and fixed_version_id IN (?)", project_id, RbStory.trackers, sprint_ids])
+    end
+
+    return options
   end
 
-  def self.at_rank(project_id, sprint_id, rank)
-    return RbStory.find(:first,
-                      :order => RbStory::ORDER,
-                      :conditions => RbStory.condition(project_id, sprint_id),
-                      :joins => [:status, :project],
-                      :limit => 1,
-                      :offset => rank - 1)
+  def self.backlog(project_id, sprint_id, options={})
+    stories = []
+
+    prev = nil
+    RbStory.find(:all, RbStory.find_options(options.merge({
+      :project => project_id,
+      :sprint => sprint_id,
+      :order => :position,
+    }))).each_with_index {|story, i|
+      stories << story
+
+      prev.higher_item = story if prev
+      story.lower_item = prev
+
+      story.rank = i + 1
+
+      prev = story
+    }
+
+    return stories
+  end
+
+  def self.product_backlog(project, limit=nil)
+    return RbStory.backlog(project.id, nil, :limit => limit)
+  end
+
+  def self.sprint_backlog(sprint, options={})
+    return RbStory.backlog(sprint.project.id, sprint.id, options)
+  end
+
+  def self.backlogs_by_sprint(project, sprints, options={})
+    ret = RbStory.backlog(project.id, sprints.map {|s| s.id }, options)
+    sprint_of = {}
+    ret.each do |backlog|
+      sprint_of[backlog.fixed_version_id] ||= []
+      sprint_of[backlog.fixed_version_id].push(backlog)
+    end
+    return sprint_of
+  end
+
+  def self.stories_open(project)
+    stories = []
+
+    RbStory.find(:all,
+                  :order => :position,
+                  :conditions => ["project_id = ? AND tracker_id in (?) and is_closed = ?",project.id,RbStory.trackers,false],
+                  :joins => :status).each_with_index {|story, i|
+      story.rank = i + 1
+      stories << story
+    }
+    return stories
+  end
+
+  def self.create_and_position(params)
+    params['prev'] = params.delete('prev_id') if params.include?('prev_id')
+
+    # lft and rgt fields are handled by acts_as_nested_set
+    attribs = params.select{|k,v| !['prev', 'id', 'lft', 'rgt'].include?(k) && RbStory.column_names.include?(k) }
+    attribs = Hash[*attribs.flatten]
+    s = RbStory.new(attribs)
+    s.save!
+
+    if params.include?('prev')
+      if params['prev'].blank?
+        s.move_to_top
+      else
+        s.move_after(RbStory.find(params['prev']))
+      end
+    end
+
+    return s
+  end
+
+  def self.find_all_updated_since(since, project_id)
+    find(:all,
+          :conditions => ["project_id = ? AND updated_on > ? AND tracker_id in (?)", project_id, Time.parse(since), trackers],
+          :order => "updated_on ASC")
+  end
+
+  def self.trackers(options = {})
+    # legacy
+    options = {:type => options} if options.is_a?(Symbol)
+
+    # somewhere early in the initialization process during first-time migration this gets called when the table doesn't yet exist
+    trackers = []
+    if ActiveRecord::Base.connection.tables.include?('settings')
+      trackers = Backlogs.setting[:story_trackers]
+      trackers = [] if trackers.blank?
+    end
+
+    trackers = Tracker.find_all_by_id(trackers)
+    trackers = trackers & options[:project].trackers if options[:project]
+    trackers = trackers.sort_by { |t| [t.position] }
+
+    case options[:type]
+      when :trackers      then return trackers
+        when :array, nil  then return trackers.collect{|t| t.id}
+        when :string      then return trackers.collect{|t| t.id.to_s}.join(',')
+        else                   raise "Unexpected return type #{options[:type].inspect}"
+    end
+  end
+
+  def tasks
+    return RbTask.tasks_for(self.id)
+  end
+
+  def set_points(p)
+    return self.journalized_update_attribute(:story_points, nil) if p.blank? || p == '-'
+
+    return self.journalized_update_attribute(:story_points, 0) if p.downcase == 's'
+
+    return self.journalized_update_attribute(:story_points, Float(p)) if Float(p) >= 0
+  end
+
+  def points_display(notsized='-')
+    # For reasons I have yet to uncover, activerecord will
+    # sometimes return numbers as Fixnums that lack the nil?
+    # method. Comparing to nil should be safe.
+    return notsized if story_points == nil || story_points.blank?
+    return 'S' if story_points == 0
+    return story_points.to_s
+  end
+
+  def update_and_position!(params)
+    params['prev'] = params.delete('prev_id') if params.include?('prev_id')
+
+    if params.include?('prev')
+      if params['prev'].blank?
+        self.move_to_top
+      else
+        self.move_after(RbStory.find(params['prev']))
+      end
+    end
+
+    # lft and rgt fields are handled by acts_as_nested_set
+    attribs = params.select{|k,v| !['prev', 'id', 'project_id', 'lft', 'rgt'].include?(k) && RbStory.column_names.include?(k) }
+    attribs = Hash[*attribs.flatten]
+
+    return self.journalized_batch_update_attributes attribs
   end
 
   def burndown(sprint=nil)
@@ -232,13 +204,11 @@ class RbStory < Issue
       if sprint.has_burndown?
         days = sprint.days(:active)
 
-        status = history(:status_id, days).collect{|s| s ? IssueStatus.find(s) : nil}
-
         series = Backlogs::MergedArray.new
         series.merge(:in_sprint => history(:fixed_version_id, days).collect{|s| s == sprint.id})
         series.merge(:points => history(:story_points, days))
-        series.merge(:open => status.collect{|s| s ? !s.is_closed? : false})
-        series.merge(:accepted => status.collect{|s| s ? (s.backlog_is?(:success)) : false})
+        series.merge(:open => history(:status_open, days))
+        series.merge(:accepted => history(:status_success, days))
         series.merge(:hours => ([0] * (days.size + 1)))
 
         tasks.each{|task| series.add(:hours => task.burndown(sprint)) }
@@ -264,6 +234,10 @@ class RbStory < Issue
 
       bd
     }
+  end
+
+  def rank
+    return super(RbStory.find_options(:project => self.project_id, :sprint => self.fixed_version_id))
   end
 
 end

@@ -4,7 +4,6 @@
     <%= link_to(sp.name, {
         :controller => 'rb_queries',
         :action => 'show',
-        :project_id => project.id,
         :sprint_id => sp.id
         }) %><br/>
   <% end %>
@@ -17,11 +16,12 @@
       :action => 'show',
       :project_id => project.id
       }) %><br/>
-  <% if BacklogsCards::LabelStock.selected_label %>
+  <% if BacklogsPrintableCards::CardPageLayout.selected %>
   <%= link_to(l(:label_product_cards), {
       :controller => 'rb_stories',
       :action => 'index',
-      :project_id => project.id
+      :project_id => project.id,
+      :format => 'pdf'
       }) %><br/>
   <% end %>
 <% end %>
@@ -31,8 +31,9 @@
         :only_path  => false,
         :protocol   => webcal,
         :controller => :rb_calendars,
-        :action   => :show,
+        :action   => :ical,
         :project_id => project,
+        :format => 'xml',
         :key    => key }) %>"><%= l(:label_webcal) %></a><br>
 <% end %>
 
@@ -52,12 +53,12 @@
       })
   %><br/>
 
-  <% if BacklogsCards::LabelStock.selected_label %>
+  <% if BacklogsPrintableCards::CardPageLayout.selected %>
     <%= link_to(l(:label_sprint_cards), {
         :controller => 'rb_stories',
         :action => 'index',
-        :project_id => project.id,
-        :sprint_id => sprint.id
+        :sprint_id => sprint.id,
+        :format => 'pdf'
         })
     %><br/>
   <% end %>
@@ -73,10 +74,9 @@
   <%= link_to(l(:label_impediments), {
       :controller => 'rb_queries',
       :action => 'impediments',
-      :project_id => project.id,
       :sprint_id => sprint.id
       }) %><br/>
-  <% if Setting.plugin_redmine_backlogs[:show_burndown_in_sidebar] == 'enabled' %>
+  <% if Backlogs.setting[:show_burndown_in_sidebar] == 'enabled' %>
     <%= render :partial => "rb_burndown_charts/burndown", :locals => {:sprint => sprint, :mode => :minimal, :style => 'margin-left:0px; margin-top:20px; width:250px; height:192px;' } %>
   <% end %>
 <% end %>

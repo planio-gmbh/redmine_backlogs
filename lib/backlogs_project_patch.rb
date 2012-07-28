@@ -39,12 +39,16 @@ module Backlogs
       Statistics.active_tests.sort.each{|m|
         r = send(m.intern)
         next if r.nil? # this test deems itself irrelevant
-        m.gsub!(/^test_/, '')
-        @statistics[r ? :succeeded : :failed] << (m.gsub(/^test_/, '') + (r ? '' : '_failed'))
+        @statistics[r ? :succeeded : :failed] <<
+          (m.to_s.gsub(/^test_/, '') + (r ? '' : '_failed'))
       }
       Statistics.stats.sort.each{|m|
         v = send(m.intern)
-        @statistics[:values][m.gsub(/^stat_/, '')] = v if v
+        @statistics[:values][m.to_s.gsub(/^stat_/, '')] =
+          v unless
+                   v.nil? ||
+                   (v.respond_to?(:"nan?") && v.nan?) ||
+                   (v.respond_to?(:"infinite?") && v.infinite?)
       }
 
       if @statistics[:succeeded].size == 0 && @statistics[:failed].size == 0
@@ -70,7 +74,7 @@ module Backlogs
 
     def self.active_tests
       # test this!
-      return Statistics.instance_methods.select{|m| m =~ /^test_/}.reject{|m| Setting.plugin_redmine_backlogs["disable_stats_#{m}".intern] }
+      return Statistics.instance_methods.select{|m| m =~ /^test_/}.reject{|m| Backlogs.setting["disable_stats_#{m}".intern] }
     end
 
     def self.active
@@ -104,7 +108,7 @@ module Backlogs
     def test_sprint_notes_available
       return !@past_sprints.detect{|s| !s.has_wiki_page}
     end
-  
+
     def test_active
       return (@project.status != Project::STATUS_ACTIVE || (@active_sprint && @active_sprint.activity))
     end
@@ -147,26 +151,38 @@ module Backlogs
     def stat_sizing_stddev
       return @hours_per_point_stddev
     end
+
+    def stat_hours_per_point
+      return @hours_per_point
+    end
   end
 
   module ProjectPatch
     def self.included(base) # :nodoc:
       base.extend(ClassMethods)
       base.send(:include, InstanceMethods)
+
+      include Backlogs::ActiveRecord::Attributes
     end
-    
+
     module ClassMethods
     end
-    
+
     module InstanceMethods
-    
-      def scrum_statistics
+
+      def scrum_statistics(force = false)
+        if force
+          # done this way to the potentially very expensive cache rebuild is done while the old cache may still be served to others
+          stats = Backlogs::Statistics.new(self)
+          Rails.cache.delete("Project(#{self.id}).scrum_statistics")
+          return Rails.cache.fetch("Project(#{self.id}).scrum_statistics", {:expires_in => 4.hours}) { stats }
+        end
         ## pretty expensive to compute, so if we're calling this multiple times, return the cached results
-        @scrum_statistics = Rails.cache.fetch("Project(#{self.id}).scrum_statistics", {:expires_in => 4.hours}) { Backlogs::Statistics.new(self) } unless @scrum_statistics
-    
+        @scrum_statistics ||= Rails.cache.fetch("Project(#{self.id}).scrum_statistics", {:expires_in => 4.hours}) { Backlogs::Statistics.new(self) }
+
         return @scrum_statistics
       end
-    
+
     end
   end
 end

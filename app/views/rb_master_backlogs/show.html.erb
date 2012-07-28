@@ -1,22 +1,39 @@
 <!-- MASTER BACKLOG VIEW -->
 <%- content_for :head_tags do %>
-  <script
-    type="text/javascript"
-    src="<%= url_for(:controller => 'rb_server_variables', :action => 'show', :caller => 'rb_master_backlogs#show', :project_id => @project.identifier) %>">
+  <script type="text/javascript"
+          src="<%= url_for(:controller => 'rb_server_variables',
+                           :action => 'project',
+                           :project_id => @project.identifier,
+                           :context => 'backlogs',
+                           :format => 'js') %>">
   </script>
 
-  <%= javascript_include_tag    'master_backlog', 'backlog', 'model', 'editable_inplace', 'sprint', 'issue', 'story', 'board_updater', 'master_backlog_updater', 'jquery/jquery.qtip.pack.js', 'jquery/jquery.qtip.setup.js', 'jquery/jquery.liveFilter.js', 'jquery/jquery.liveFilter.setup.js', :plugin => 'redmine_backlogs' %>
-  <%= stylesheet_link_tag 'jquery.qtip.css', :plugin => 'redmine_backlogs' %>
-  <%= javascript_include_tag 'master_backlog', 'backlog', 'model', 'editable_inplace', 'sprint', 'issue', 'story', 'board_updater', 'master_backlog_updater', 'burndown', :plugin => 'redmine_backlogs' %>
+  <%= javascript_include_tag(
+    'jquery/jquery.qtip.pack.js',
+    'jquery/jquery.qtip.setup.js',
+    'jquery/jquery.liveFilter.js',
+    'jquery/jquery.liveFilter.setup.js',
+    'master_backlog',
+    'backlog',
+    'model',
+    'editable_inplace',
+    'sprint',
+    'issue',
+    'story',
+    'board_updater',
+    'master_backlog_updater',
+    'burndown',
+    :plugin => 'redmine_backlogs') %>
+  <%= stylesheet_link_tag 'jquery/jquery.qtip.css', :plugin => 'redmine_backlogs' %>
   <%= stylesheet_link_tag 'master_backlog.css', :plugin => 'redmine_backlogs', :media => 'print,screen' %>
   <%= stylesheet_link_tag 'master_backlog_print.css', :plugin => 'redmine_backlogs', :media => 'print' %>
   <script type="text/javascript">jQuery(document).ready(function() { jQuery("#livefilter_controll").focus(); });</script>
   <!--[if IE]>
   <script type="text/javascript">
-    jQuery(document).ready(function() { 
-      jQuery("#backlogs_container ul").each(function() { 
-        jQuery(this).find('li:odd').css('background-color', '#dddddd'); 
-      }); 
+    jQuery(document).ready(function() {
+      jQuery("#backlogs_container ul").each(function() {
+        jQuery(this).find('li:odd').css('background-color', '#dddddd');
+      });
     });
   </script>
   <![endif]-->
@@ -48,10 +65,10 @@
 			  function toggleDiv(divid){
 				if(document.getElementById(divid).style.display == 'none'){
 				  document.getElementById(divid).style.display = 'block';
-				  document.getElementById('toggle').innerHTML = <%= l(:label_hide_completed_sprints).to_json %>
+				  document.getElementById('toggle').innerHTML = "<%= l(:label_hide_completed_sprints) %>"
 				}else{
 				  document.getElementById(divid).style.display = 'none';
-				  document.getElementById('toggle').innerHTML = <%= l(:label_show_completed_sprints).to_json %>
+				  document.getElementById('toggle').innerHTML = "<%= l(:label_show_completed_sprints) %>"
 				}
 			  }
 		  </script>

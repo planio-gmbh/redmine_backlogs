@@ -9,7 +9,7 @@ rails3 = Gem::Dependency.new('rails', '~>3.0')
 RAILS_VERSION_IS_3 = rails3 =~ deps['rails']
 
 gem "holidays", "=1.0.3"
-gem "icalendar"
+gem "icalendar", '~>1.1.6'
 gem "nokogiri"
 gem "open-uri-cached"
 gem "prawn"

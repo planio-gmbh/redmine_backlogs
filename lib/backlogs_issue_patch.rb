@@ -108,6 +108,7 @@ module Backlogs
 
             self.fixed_version = self.story.fixed_version if self.story
             self.start_date = Date.today if self.start_date.blank? && self.status_id != IssueStatus.default.id
+            self.start_date = [Date.today, soonest_start].compact.max if self.start_date.blank? && self.status_id != IssueStatus.default.id
 
             self.tracker = Tracker.find(RbTask.tracker) unless self.tracker_id == RbTask.tracker
           elsif self.is_story? && Backlogs.setting[:set_start_and_duedates_from_sprint]

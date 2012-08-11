@@ -164,6 +164,7 @@ class RbJournal < ActiveRecord::Base
   end
 
   def change=(prop)
+    prop.symbolize_keys!
     self.property = prop[:property]
     self.value = prop[:value]
   end

@@ -13,7 +13,6 @@ gem "icalendar", '~>1.1.6'
 gem "nokogiri"
 gem "open-uri-cached"
 gem "prawn"
-gem 'json'
 gem "system_timer" if RUBY_VERSION =~ /^1\.8\./ && RUBY_PLATFORM =~ /darwin|linux/
 
 group :development do

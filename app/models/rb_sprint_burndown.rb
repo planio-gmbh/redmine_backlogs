@@ -22,6 +22,7 @@ class RbSprintBurndown < ActiveRecord::Base
   def touch!(story_id = nil)
     if story_id
       story_id = Integer(story_id)
+      self.stories ||= []
       return if self.stories.include?(story_id)
       self.stories << story_id
     end

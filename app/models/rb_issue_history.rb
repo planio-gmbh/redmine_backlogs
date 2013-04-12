@@ -46,6 +46,7 @@ class RbIssueHistory < ActiveRecord::Base
   end
 
   def expand
+    self.history ||= []
     ((0..self.history.size - 2).to_a.collect{|i|
       (self.history[i][:date] .. self.history[i+1][:date] - 1).to_a.collect{|d|
         self.history[i].merge(:date => d)
@@ -295,6 +296,7 @@ class RbIssueHistory < ActiveRecord::Base
   end
 
   def touch_sprint
+    self.history ||= []
     self.history.select{|h| h[:sprint]}.uniq{|h| "#{h[:sprint]}::#{h[:tracker]}"}.each{|h|
       RbSprintBurndown.find_or_initialize_by_version_id(h[:sprint]).touch!(h[:tracker] == :story ? self.issue.id : nil) 
     }
@@ -313,9 +315,9 @@ class RbIssueHistory < ActiveRecord::Base
   def update_parent(date=nil)
     if (p = self.issue.parent) # if no parent, nothing to do
       date ||= self.history[0][:date] # the after_create calls this function without a parameter, so we know it's the creation call. Get the `yesterday' entry.
-      parent_history_index = p.history.history.index{|d| d[:date] == date} # does the parent have an history entry on that date?
+      parent_history_index = p.history.history.index{|d| d[:date] == date} if p.history.history # does the parent have an history entry on that date?
       if parent_history_index.nil? # if not, stretch the history to get the values at that date
-        parent_data = p.history.expand.detect{|d| d[:date] == date} 
+        parent_data = p.history.expand.compact.detect{|d| d[:date] == date} 
       else # if so, grab that entry
         parent_data = p.history.history[parent_history_index]
       end

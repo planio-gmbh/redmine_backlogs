@@ -38,13 +38,18 @@ module Backlogs
           backlogs_filters = { }
         else
           backlogs_filters = {
+            # mother of *&@&^*@^*#.... order "20" is a magical constant in RM2.2 which means "I'm a custom field". What. The. Fuck.
             "backlogs_issue_type" => {  :type => :list,
+                                        :name => l(:field_backlogs_issue_type),
                                         :values => [[l(:backlogs_story), "story"], [l(:backlogs_task), "task"], [l(:backlogs_impediment), "impediment"], [l(:backlogs_any), "any"]],
-                                        :order => 20 }
+                                        :order => 21 },
+            "story_points" => { :type => :float,
+                                :name => l(:field_story_points),
+                                :order => 22 }
                              }
         end
 
-        return @available_filters.merge(backlogs_filters)
+        @available_filters = @available_filters.merge(backlogs_filters)
       end
 
       def sql_for_field_with_backlogs_issue_type(field, operator, value, db_table, db_field, is_custom_filter=false)

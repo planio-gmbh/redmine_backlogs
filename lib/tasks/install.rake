@@ -10,14 +10,6 @@ namespace :redmine do
 
       raise "You must set the default issue priority in redmine prior to installing backlogs" unless IssuePriority.default
 
-      begin
-        Rails.cache.clear
-      rescue NoMethodError
-        puts "** WARNING: Automatic cache delete not supported by #{Rails.cache.class}, please clear manually **"
-      rescue SystemCallError
-        puts "Cache directory is not found"
-      end
-
       Backlogs.gems.each_pair {|gem, installed|
         raise "You are missing the '#{gem}' gem" unless installed
       }
@@ -44,10 +36,14 @@ namespace :redmine do
           print "\nCard labels could not be fetched (#{fetch_error}). Please try again later. Proceeding anyway...\n"
         end
       else
-        if ! File.exist?(File.dirname(__FILE__) + '/../labels.yaml')
+        if ! File.exist?(File.dirname(__FILE__) + '/../labels/labels.yaml')
           print "Default labels installed\n"
-          FileUtils.cp(File.dirname(__FILE__) + '/../labels.yaml.default', File.dirname(__FILE__) + '/../labels.yaml')
+          FileUtils.cp(File.dirname(__FILE__) + '/../labels/labels.yaml.default', File.dirname(__FILE__) + '/../labels/labels.yaml')
         end
+      end
+
+      if BacklogsPrintableCards::CardPageLayout.selected.blank? && BacklogsPrintableCards::CardPageLayout.available.size > 0 
+        Backlogs.setting[:card_spec] = BacklogsPrintableCards::CardPageLayout.available[0]
       end
 
       trackers = Tracker.find(:all)

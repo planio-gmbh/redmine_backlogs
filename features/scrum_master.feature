@@ -12,7 +12,7 @@ Feature: Scrum Master
         | Sprint 001 | 2010-01-01        | 2010-01-31      |
         | Sprint 002 | 2010-02-01        | 2010-02-28      |
         | Sprint 003 | 2010-03-01        | 2010-03-31      |
-        | Sprint 004 | 2.weeks.ago       | 1.week.from_now |
+        | Sprint 004 | 2 weeks ago       | next week       |
       And I have defined the following stories in the product backlog:
         | subject |
         | Story 1 |
@@ -50,7 +50,6 @@ Feature: Scrum Master
      Then the request should complete successfully
      When I follow "Impediments"
      Then the request should complete successfully
-      And dump the page to "log/ViewImpediments.html"
       And I should see "Impediment 1"
 
   Scenario: Create a new sprint
@@ -116,13 +115,11 @@ Feature: Scrum Master
       And calendar feed download should fail
 
   Scenario: Download printable cards for the product backlog
-    Given I have selected card label stock Zweckform 3474
       And I am viewing the issues sidebar
      When I follow "Product backlog cards"
      Then the request should complete successfully
 
   Scenario: Download printable cards for the task board
-    Given I have selected card label stock Zweckform 3474
       And I move the story named Story 4 up to the 1st position of the sprint named Sprint 001
       And I am viewing the issues sidebar for Sprint 001
      When I follow "Sprint cards"
@@ -144,3 +141,11 @@ Feature: Scrum Master
      Then the request should complete successfully
      Then the wiki page Sprint 001 should contain Sprint Template
 
+  Scenario: Update sprint with start date greater than end date
+    Given I am viewing the master backlog
+      And I want to edit the sprint named Sprint 001
+      And I want to set the sprint_start_date of the sprint to 2012-03-01
+      And I want to set the effective_date of the sprint to 2012-02-20
+     When I update the sprint
+     Then the server should return an update error
+      And the error message should say "Sprint cannot end before it starts"

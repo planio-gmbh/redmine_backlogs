@@ -80,11 +80,11 @@ filter:progid:DXImageTransform.Microsoft.Gradient(Enabled=1,GradientType=0,Start
   end
 
   def status_id_or_default(story)
-    story.new_record? ? IssueStatus.find(:first, :order => "position ASC").id : story.status.id
+    story.new_record? ? IssueStatus.default.id : story.status.id
   end
 
   def status_label_or_default(story)
-    story.new_record? ? IssueStatus.find(:first, :order => "position ASC").name : story.status.name
+    story.new_record? ? IssueStatus.default.name : story.status.name
   end
 
   def sprint_html_id_or_empty(sprint)
@@ -121,7 +121,7 @@ filter:progid:DXImageTransform.Microsoft.Gradient(Enabled=1,GradientType=0,Start
 
   def date_string_with_milliseconds(d, add=0)
     return '' if d.blank?
-    d.strftime("%B %d, %Y %H:%M:%S") + '.' + (d.to_f % 1 + add).to_s.split('.')[1]
+    d.strftime("%B %d, %Y %H:%M:%S") + '.' + (d.to_f % 1 + add).to_s.split('.')[1] + d.strftime(" %z")
   end
 
   def remaining_hours(item)
@@ -176,13 +176,16 @@ filter:progid:DXImageTransform.Microsoft.Gradient(Enabled=1,GradientType=0,Start
     export
   end
 
-  # Renders the project quick-jump box
-  def render_backlog_project_jump_box
+  def self.find_backlogs_enabled_active_projects
     projects = EnabledModule.find(:all,
                              :conditions => ["enabled_modules.name = 'backlogs' and status = ?", Project::STATUS_ACTIVE],
                              :include => :project,
                              :joins => :project).collect { |mod| mod.project}
+  end
 
+  # Renders the project quick-jump box
+  def render_backlog_project_jump_box
+    projects = RbCommonHelper.find_backlogs_enabled_active_projects
     projects = Member.find(:all, :conditions => ["user_id = ? and project_id IN (?)", User.current.id, projects.collect(&:id)]).collect{ |m| m.project}
 
     if projects.any?

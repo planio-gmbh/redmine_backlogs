@@ -1,4 +1,5 @@
 include RbCommonHelper
+include RbFormHelper
 include ProjectsHelper
 
 # Responsible for exposing release CRUD.
@@ -32,7 +33,7 @@ class RbReleasesController < RbApplicationController
   end
 
   def edit
-    if request.post? and @release.batch_update_attributes(params[:release])
+    if request.post? and @release.update_attributes(params[:release])
       flash[:notice] = l(:notice_successful_update)
       redirect_to :controller => 'rb_releases', :action => 'show', :release_id => @release
     else

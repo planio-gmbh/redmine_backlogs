@@ -12,6 +12,8 @@ module BacklogsPlugin
 
       def view_issues_sidebar_planning_bottom(context={ })
         begin
+          return '' if User.current.anonymous?
+
           project = context[:project]
 
           return '' unless project && !project.blank?
@@ -35,21 +37,25 @@ module BacklogsPlugin
           end
 
           url_options = {
-            :only_path  => false,
+            :only_path  => true,
             :controller => :rb_hooks_render,
             :action     => :view_issues_sidebar,
-            :project_id => project.identifier,
-            :host => context[:request].host_with_port,
-            :protocol => context[:request].ssl? ? 'https' : 'http'
+            :project_id => project.identifier
           }
           url_options[:sprint_id] = sprint_id if sprint_id
+          if Rails::VERSION::MAJOR < 3
+            url = '' #actionpack-2.3.14/lib/action_controller/url_rewriter.rb is injecting relative_url_root
+          else
+            url = Redmine::Utils.relative_url_root #actionpack-3* is not???
+          end
+          url += url_for(url_options)
 
           # Why can't I access protect_against_forgery?
           return %{
             <div id="backlogs_view_issues_sidebar"></div>
             <script type="text/javascript">
               jQuery(document).ready(function() {
-                jQuery('#backlogs_view_issues_sidebar').load('#{url_for(url_options)}');
+                jQuery('#backlogs_view_issues_sidebar').load('#{url}');
               });
             </script>
           }
@@ -70,9 +76,14 @@ module BacklogsPlugin
           project = context[:project]
 
           if issue.is_story?
-            snippet += "<tr><th>#{l(:field_story_points)}</th><td>#{RbStory.find(issue.id).points_display}</td></tr>"
+            snippet += "<tr><th>#{l(:field_story_points)}</th><td>#{RbStory.find(issue.id).points_display}</td>"
+            unless issue.remaining_hours.nil?
+              snippet += "<th>#{l(:field_remaining_hours)}</th><td>#{l_hours(issue.remaining_hours)}</td>"
+            end
+            snippet += "</tr>"
             vbe = issue.velocity_based_estimate
             snippet += "<tr><th>#{l(:field_velocity_based_estimate)}</th><td>#{vbe ? vbe.to_s + ' days' : '-'}</td></tr>"
+
           end
 
           if issue.is_task? && User.current.allowed_to?(:update_remaining_hours, project) != nil
@@ -147,6 +158,13 @@ module BacklogsPlugin
         end
       end
 
+      def view_issues_new_top(context={ })
+        #Remove the copy_subtasks functionality from redmine 2.1+ since backlogs offers it with a choice to copy only open tasks
+        project = context[:project]
+        return '' unless project.module_enabled?('backlogs')
+        return '<script type="text/javascript">$(function(){try{$("#copy_subtasks")[0].checked=false;$($("#copy_subtasks")[0].parentNode).hide();}catch(e){}});</script>' if (Redmine::VERSION::MAJOR == 2 && Redmine::VERSION::MINOR >= 1) || Redmine::VERSION::MAJOR > 2
+      end
+
       def view_versions_show_bottom(context={ })
         begin
           version = context[:version]
@@ -183,13 +201,13 @@ module BacklogsPlugin
       def view_my_account(context={ })
         begin
           return %{
+            </fieldset>
+            <fieldset class="box tabular">
             <h3>#{l(:label_backlogs)}</h3>
-            <div class="box tabular">
             <p>
               #{label :backlogs, :task_color}
               #{text_field :backlogs, :task_color, :value => context[:user].backlogs_preference[:task_color]}
             </p>
-            </div>
           }
         rescue => e
           exception(context, e)
@@ -261,7 +279,9 @@ module BacklogsPlugin
 
         if User.current.admin? && !context[:request].session[:backlogs_configured]
           context[:request].session[:backlogs] = Backlogs.configured?
-          context[:controller].send(:flash)[:error] = l(:label_backlogs_unconfigured) if !context[:request].session[:backlogs]
+          unless context[:request].session[:backlogs]
+            context[:controller].send(:flash)[:error] = l(:label_backlogs_unconfigured, {:administration => l(:label_administration), :plugins => l(:label_plugins), :configure => l(:button_configure)})
+          end
         end
 
         return context[:controller].send(:render_to_string, {:locals => context}.merge(:partial=> 'hooks/rb_include_scripts'))
@@ -296,18 +316,24 @@ module BacklogsPlugin
         return '' if time_entry[:issue_id].blank?
 
         params = context[:params]
-        return unless params.include?("commit")
 
         issue = Issue.find(time_entry.issue_id)
         return unless Backlogs.configured?(issue.project) &&
                       Backlogs.setting[:timelog_from_taskboard]=='enabled'
 
         if issue.is_task? && User.current.allowed_to?(:update_remaining_hours, time_entry.project) != nil
-          remaining_hours = params[:remaining_hours].gsub(',','.').to_f
-          if remaining_hours != issue.remaining_hours
-            issue.journalized_update_attribute(:remaining_hours, remaining_hours) if time_entry.save
+          if params.include?("remaining_hours")
+            remaining_hours = params[:remaining_hours].gsub(',','.').to_f
+            if remaining_hours != issue.remaining_hours
+              issue.journalized_update_attribute(:remaining_hours, remaining_hours) if time_entry.save
+            end
           end
         end
+      end
+
+      def helper_projects_settings_tabs(context={})
+        project = context[:project]
+        context[:tabs] << {:name => 'backlogs', :action => :manage_project_backlogs, :partial => 'backlogs/project_settings', :label => :label_backlogs} if project.module_enabled?('backlogs') and User.current.allowed_to?(:configure_backlogs, nil, :global=>true)
       end
 
     end

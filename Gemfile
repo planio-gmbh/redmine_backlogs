@@ -17,7 +17,7 @@ gem "system_timer" if RUBY_VERSION =~ /^1\.8\./ && RUBY_PLATFORM =~ /darwin|linu
 
 group :development do
   gem "github-v3-api"
-  gem "inifile"
+  gem "inifile", "1.1.0"
 end
 
 group :test do

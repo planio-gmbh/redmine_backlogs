@@ -16,7 +16,7 @@ gem "prawn"
 gem "system_timer" if RUBY_VERSION =~ /^1\.8\./ && RUBY_PLATFORM =~ /darwin|linux/
 
 group :development do
-  gem "inifile"
+  gem "inifile", "1.1.0"
 end
 
 group :test do
@@ -63,6 +63,7 @@ group :test do
   gem "spork"
   gem "test-unit", "=1.2.3" if RUBY_VERSION >= "1.9" and ENV['IN_RBL_TESTENV'] == 'true'
   gem "timecop", '~> 0.3.5'
+  gem "inifile", "1.1.0"
 end
 
 # moved out of the dev group so backlogs can be tested by the user after install. Too many issues of weird setups with apache, nginx, etc.

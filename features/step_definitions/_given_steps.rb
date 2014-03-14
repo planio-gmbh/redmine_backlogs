@@ -101,7 +101,22 @@ end
 
 Given /^I set the (.+) of the task to (.+)$/ do |attribute, value|
   value = '' if value == 'an empty string'
+  if attribute=="assigned_to"
+    attribute="assigned_to_id"
+    value = User.find(:first, :conditions => ["login=?", value]).id
+  end
   @task_params[attribute] = value
+end
+
+Given /^I add the tracker (.+) to the story trackers$/ do |tracker|
+  tracker_id = Tracker.find(:first, :conditions=>{:name => tracker}).id
+  @project.update_attribute :tracker_ids, (@project.tracker_ids << tracker_id)
+  Backlogs.setting[:story_trackers] << tracker_id
+end
+  
+Given /^I set the default story tracker to (.+)$/ do |tracker|
+  t = get_tracker(tracker)
+  Backlogs.setting[:default_story_tracker] = t.id.to_s
 end
 
 Given /^I want to create a story$/ do
@@ -215,6 +230,11 @@ Given /^no versions or issues exist$/ do
   Version.destroy_all
 end
 
+Given(/^no releases or release multiviews exist$/) do
+  RbRelease.destroy_all
+  RbReleaseMultiview.destroy_all
+end
+
 Given /^I have selected the (.*) project$/ do |project_id|
   @project = get_project(project_id)
 end
@@ -256,6 +276,19 @@ Given /^I have the following issue statuses available:$/ do |table|
     s.default_done_ratio = status['default_done_ratio'].to_i unless status['default_done_ratio'].blank?
 
     s.save!
+  end
+end
+
+Given /^I have defined the following logins:$/ do |table|
+  table.hashes.each do |user|
+    u = User.new
+    u.login = user['login']
+    u.mail = "#{user['login']}@example.org"
+    u.firstname = "Test"
+    u.lastname = "Run"
+    u.save!
+    m = Member.new(:role_ids => [Role.find_by_name("Developer").id], :user_id => u.id)
+    @project.members << m
   end
 end
 
@@ -304,8 +337,13 @@ Given /^I have defined the following stories in the product backlog:$/ do |table
     else
       project = @project
     end
+
+    t_value = story.delete('tracker')
+    t = get_tracker(t_value.strip) unless t_value.nil?
+      
     params = initialize_story_params project.id
     params['subject'] = story.delete('subject').strip
+    params['tracker_id'] = t.id unless t.nil?
     params['story_points'] = story.delete('points').to_i if story['points'].to_s != ''
     params['release_id'] = RbRelease.find_by_name(story['release']).id if story['release'].to_s.strip != ''
     story.delete('release') unless story['release'].nil?
@@ -328,6 +366,7 @@ Given /^I have defined the following stories in the following sprints?:$/ do |ta
       project = sprint.project || @project
     end
     sprint.should_not be_nil
+    t = get_tracker(story.delete('tracker'))
     params = initialize_story_params project.id
     params['subject'] = story.delete('subject')
     params['fixed_version_id'] = sprint.id
@@ -353,6 +392,9 @@ Given /^I have defined the following tasks:$/ do |table|
 
     params = initialize_task_params(story.id)
     params['subject'] = task.delete('subject')
+
+    username = task.delete('assigned_to')
+    params['assigned_to_id'] = User.find_by_login(username).id unless username.nil? || username.strip == ''
 
     status = task.delete('status')
     params['status_id'] = IssueStatus.find(:first, :conditions => ['name = ?', status]).id unless status.blank?
@@ -582,6 +624,17 @@ Given /^I have defined the following releases:$/ do |table|
     RbRelease.create! release
   end
 end
+
+Given /^I have defined the following release multiviews:$/ do |table|
+  RbReleaseMultiview.delete_all
+  table.hashes.each do |release_multiview|
+    release_multiview['project_id'] = get_project((release_multiview.delete('project')||'ecookbook')).id
+    release_multiview['release_ids'] = get_releases(release_multiview['releases'])
+    release_multiview.delete('releases')
+    RbReleaseMultiview.create! release_multiview
+  end
+end
+
 
 Given /^I view the release page$/ do
   visit url_for(:controller => :projects, :action => :show, :id => @project, :only_path => true)

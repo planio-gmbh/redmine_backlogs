@@ -74,6 +74,10 @@
 <p>
   <%= content_tag(:label, l(:backlogs_story_tracker)) %>
   <%= select_tag("settings[story_trackers]", options_from_collection_for_select(Tracker.all, :id, :name, RbStory.trackers), :multiple => true) %>
+  <br />
+  <%= content_tag(:label, l(:backlogs_default_story_tracker)) %>
+  <%= select_tag("settings[default_story_tracker]", options_from_collection_for_select(Tracker.all, :id, :name, Backlogs.setting[:default_story_tracker])) %>
+  
   <table>
     <thead>
       <tr>
@@ -175,6 +179,12 @@
   <%= content_tag(:label, l(:backlogs_auto_assign_task)) %>
   <%= check_box_tag("settings[auto_assign_task]", 'enabled',
       Backlogs.setting[:auto_assign_task]) %>
+</p>
+
+<p>
+  <%= content_tag(:label, l(:backlogs_show_priority)) %>
+  <%= check_box_tag("settings[show_priority]", 'enabled',
+      Backlogs.setting[:show_priority]) %>
 </p>
 </fieldset>
 

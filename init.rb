@@ -21,6 +21,9 @@ object_to_prepare.to_prepare do
     Issue.safe_attributes "story_points", "position", "remaining_hours"
   end
 
+  if (Redmine::VERSION::MAJOR > 2) || (Redmine::VERSION::MAJOR == 2 && Redmine::VERSION::MINOR >= 3)
+    require_dependency 'backlogs_time_report_patch'
+  end
   require_dependency 'backlogs_issue_query_patch'
   require_dependency 'backlogs_issue_patch'
   require_dependency 'backlogs_issue_status_patch'
@@ -49,10 +52,11 @@ Redmine::Plugin.register :redmine_backlogs do
   name 'Redmine Backlogs'
   author "friflaj,Mark Maglana,John Yani,mikoto20000,Frank Blendinger,Bo Hansen,stevel,Patrick Atamaniuk"
   description 'A plugin for agile teams'
-  version 'v1.0.3'
+  version 'v1.0.6'
 
   settings :default => {
                          :story_trackers            => nil,
+                         :default_story_tracker     => nil,
                          :task_tracker              => nil,
                          :card_spec                 => nil,
                          :story_close_status_id     => '0',
@@ -60,7 +64,9 @@ Redmine::Plugin.register :redmine_backlogs do
                          :story_points              => "1,2,3,5,8",
                          :show_burndown_in_sidebar  => 'enabled',
                          :show_project_name         => nil,
-                         :scrum_stats_menu_position => 'top'
+                         :scrum_stats_menu_position => 'top',
+                         :show_redmine_std_header   => 'enabled',
+                         :show_priority             => nil
                        },
            :partial => 'backlogs/settings'
 
@@ -108,7 +114,10 @@ Redmine::Plugin.register :redmine_backlogs do
                                       }
 
     # Release permissions
-    permission :modify_releases,      { :rb_releases => [:new, :create, :edit, :update, :snapshot, :destroy]  }
+    permission :modify_releases,      {
+                                        :rb_releases => [:new, :create, :edit, :update, :snapshot, :destroy],
+                                        :rb_releases_multiview => [:new, :show, :edit, :destroy]
+                                      }
 
     # Sprint permissions
     # :show_sprints and :list_sprints are implicit in :view_master_backlog permission

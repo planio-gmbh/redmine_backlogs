@@ -52,6 +52,14 @@ def get_project(identifier)
   Project.find(identifier)
 end
 
+def get_releases(list)
+  list.split(',').collect{|r| RbRelease.find_by_name(r).id}
+end
+
+def get_tracker(identifier)
+  Tracker.find_by_name(identifier)
+end
+
 
 def current_sprint(name = nil)
   if name.is_a?(Symbol)
@@ -156,7 +164,7 @@ end
 def initialize_story_params(project_id = nil)
   @story = HashWithIndifferentAccess.new(RbStory.new.attributes)
   @story['project_id'] = project_id ? Project.find(project_id).id : @project.id
-  @story['tracker_id'] = RbStory.trackers.first
+  @story['tracker_id'] = RbStory.trackers.include?(Backlogs.setting[:default_story_tracker]) ? Backlogs.setting[:default_story_tracker] : RbStory.trackers.first 
   @story['author_id']  = @user.id
   @story
 end
@@ -313,3 +321,18 @@ def check_backlog_menu_new_story(links, project)
   end
   return found
 end
+
+When /^(?:|I )select multiple "([^"]*)" from "([^"]*)"(?: within "([^"]*)")?$/ do |value, field, selector|
+  options = page.find_field(field).all("option").collect(&:text)
+  with_scope(selector) do
+    # clear all options
+    options.each{|v|
+      unselect(v, :from => field)
+    }
+    # Select the requested options
+    value.split(",").each{|v|
+      select(v, :from => field)
+    }
+  end
+end
+

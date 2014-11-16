@@ -7,6 +7,11 @@ class RbUpdatedItemsController < RbApplicationController
   # params[:only] limits the types of models that the method
   # should return
   def show
+    if params[:since].blank?
+      render_404
+      return false
+    end
+
     @settings = Backlogs.settings
     only  = (params[:only] ? params[:only].split(/, ?/).map{|v| v.to_sym} : [:sprints, :stories, :tasks, :impediments])
     @items = HashWithIndifferentAccess.new
